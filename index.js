@@ -2,7 +2,7 @@ var net = require('net');
 var hl7 = require('hl7');
 var util = require('util');
 var EventEmitter = require('events').EventEmitter;
-
+var http = require('http');
 //The header is a vertical tab character <VT> its hex value is 0x0b.
 //The trailer is a field separator character <FS> (hex 0x1c) immediately followed by a carriage return <CR> (hex 0x0d)
 
@@ -42,7 +42,7 @@ function MLLPServer(host, port, logger) {
 
     var Server = net.createServer(function (sock) {
 
-        logger('CONNECTED: ' + sock.remoteAddress + ':' + sock.remotePort);
+        logger('Connection established......: ' + sock.remoteAddress + ':' + sock.remotePort);
 
         function ackn(data, ack_type) {
             //get message ID
@@ -63,20 +63,57 @@ function MLLPServer(host, port, logger) {
         }
 
         sock.on('data', function (data) {
+            
             data = data.toString();
             //strip separators
             logger("DATA:\nfrom " + sock.remoteAddress + ':\n' + data.split("\r").join("\n"));
-
             if (data.indexOf(VT) > -1) {
                 self.message = '';
             }
 
             self.message += data.replace(VT, '');
-
             if (data.indexOf(FS + CR) > -1) {
                 self.message = self.message.replace(FS + CR, '');
                 var data2 = hl7.parseString(self.message);
                 logger("Message:\r\n" + self.message + "\r\n\r\n");
+                //POST this data to the converter
+                let data_array = self.message.split("\r")
+                let data_json = '{'
+                for(value of data_array) {
+                    var v = value.split("|")
+                    if(data_json == '{') {
+                        data_json += '"' + v[0] + '": "' + value + '"'
+                    } else {
+                        data_json += ', "' + v[0] + '": "' + value + '"'
+                    }
+
+                }
+                data_json += '}'
+                // An object of options to indicate where to post to
+                var post_options = {
+                    host: 'localhost',
+                    port: '3001',
+                    path: '/result',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(data_json)
+                    }
+                };
+
+                // Set up the request
+                var post_req = http.request(post_options, function(res) {
+                    res.setEncoding('utf8');
+                    res.on('data', function (chunk) {
+                        console.log('Response: ' + chunk);
+                    });
+                });
+
+                // post the data
+                post_req.write(data_json);
+                post_req.end();
+
+            
                 /**
                  * MLLP HL7 Event. Fired when a HL7 Message is received.
                  * @event MLLPServer#hl7
@@ -86,13 +123,15 @@ function MLLPServer(host, port, logger) {
                  */
                 self.emit('hl7', self.message);
                 var ack = ackn(data2, "AA");
-                sock.write(VT + ack + FS + CR);
+                sock.write('Ack Message',VT + ack + FS + CR);
             }
-
         });
 
-        sock.on('close', function (data) {
-            logger('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+     /**   sock.on('close', function (data) {
+            logger('Server disconnected.....: ' + sock.remoteAddress + ' ' + sock.remotePort);
+        });*/
+        sock.on('end', function () {
+            logger('Server disconnected.....: ' + sock.remoteAddress + ' ' + sock.remotePort);
         });
 
     });
@@ -103,6 +142,8 @@ function MLLPServer(host, port, logger) {
             port: receivingPort
         }, function () {
             logger('Sending data to ' + receivingHost + ':' + receivingPort);
+            logger(VT + hl7Data + FS + CR);
+            //sendingClient.write(VT + hl7Data + FS + CR);
             sendingClient.write(VT + hl7Data + FS + CR);
         });
 
@@ -112,6 +153,7 @@ function MLLPServer(host, port, logger) {
         };
 
         sendingClient.on('data', function (rawAckData) {
+            logger('raw ack data', rawAckData);
             logger(receivingHost + ':' + receivingPort + ' ACKED data');
 
             var ackData = rawAckData
@@ -120,7 +162,7 @@ function MLLPServer(host, port, logger) {
                 .split('\r')[1] // Ack data
                 .replace(FS, '')
                 .replace(CR, '');
-
+            logger('processed raw ack data', ackData);
             callback(null, ackData);
             _terminate();
         });
@@ -133,7 +175,7 @@ function MLLPServer(host, port, logger) {
         });
     };
 
-    Server.listen(PORT, HOST);
+    Server.listen(PORT, HOST,function(){ console.log('server started listening...');} );
 }
 
 util.inherits(MLLPServer, EventEmitter);

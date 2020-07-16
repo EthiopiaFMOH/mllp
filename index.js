@@ -82,9 +82,9 @@ function MLLPServer(host, port, logger) {
                 for(value of data_array) {
                     var v = value.split("|")
                     if(data_json == '{') {
-                        data_json += '"' + v[0] + '": "' + value + '"'
+                        data_json += '"' + v[0].toLowerCase() + '": "' + value + '"'
                     } else {
-                        data_json += ', "' + v[0] + '": "' + value + '"'
+                        data_json += ', "' + v[0].toLowerCase() + '": "' + value + '"'
                     }
 
                 }

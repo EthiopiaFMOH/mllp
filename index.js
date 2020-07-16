@@ -136,7 +136,7 @@ function MLLPServer(host, port, logger) {
 
     });
 
-    self.send = function (receivingHost, receivingPort, hl7Data, callback) {
+    self.send = function (receivingHost, receivingPort, hl7Data, callback, retries = 4) {
         var sendingClient = new net.connect({
             host: receivingHost,
             port: receivingPort
@@ -169,9 +169,12 @@ function MLLPServer(host, port, logger) {
 
         sendingClient.on('error', function (error) {
             logger(receivingHost + ':' + receivingPort + ' couldn\'t process data');
-
-            callback(error, null);
-            _terminate();
+            if(retries > 0) {
+                self.send(receivingHost, receivingPort, hl7Data, callback, retries-1)
+            } else {
+                callback(error, null);
+                _terminate();
+            }
         });
     };
 

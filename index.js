@@ -82,7 +82,8 @@ function MLLPServer(host, port, logger) {
                 for(value of data_array) {
                     var v = value.split("|")
                     if(data_json == '{') {
-                        data_json += '"' + v[0].toLowerCase() + '": "' + value + '"'
+                       // data_json += '"' + v[0].toLowerCase() + '": "' + value + '"'
+			data_json += '"' + v[0].toLowerCase() + '": "' + value.replace("&", "\\&") + '"'
                     } else {
                         data_json += ', "' + v[0].toLowerCase() + '": "' + value + '"'
                     }
@@ -90,9 +91,10 @@ function MLLPServer(host, port, logger) {
                 }
                 data_json += '}'
                 // An object of options to indicate where to post to
+		console.log('Data Json\n' + data_json)
                 var post_options = {
-                    host: 'localhost',
-                    port: '3001',
+                    host: '127.0.0.1',
+                    port: '15000',
                     path: '/result',
                     method: 'POST',
                     headers: {
@@ -110,7 +112,8 @@ function MLLPServer(host, port, logger) {
                 });
 
                 // post the data
-                post_req.write(data_json);
+		 post_req.write(data_json);
+		//post_req.write(JSON.parse(data_json));
                 post_req.end();
 
             
@@ -123,7 +126,7 @@ function MLLPServer(host, port, logger) {
                  */
                 self.emit('hl7', self.message);
                 var ack = ackn(data2, "AA");
-                sock.write('Ack Message',VT + ack + FS + CR);
+                sock.write(VT + ack + FS + CR);
             }
         });
 
